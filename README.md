@@ -15,6 +15,7 @@
         cx = "Your_Google_CX_Key"
         api_key = "Your_API_Key"
         user_agent = "Custom_User_Agent"
+        file_extension = "list"
     ```
 6. Run the Program with the command `` python3 subDomainEnum.py ``
 7. Enter the domain name eg: ``example.com``
