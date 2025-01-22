@@ -20,4 +20,4 @@
 6. Run the Program with the command `` python3 subDomainEnum.py ``
 7. Enter the domain name eg: ``example.com``
 
-The subdomains will be given
+The subdomains will be saved in the path that will be mentioned in the code.(in the same directory)
