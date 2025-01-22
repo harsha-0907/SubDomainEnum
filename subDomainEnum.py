@@ -73,7 +73,7 @@ class GoogleQuery:
                     if _subdomain not in subdomains:
                         subdomains.append(_subdomain)
                         searchAgain = True
-                print(subdomains)
+                # print(subdomains)
                 if not searchAgain:
                     # If we don't have anymore new subdomains -> break
                     break
@@ -198,5 +198,5 @@ class SubDomainEnumerator():
             file.write("\n".join(_subdomain for _subdomain in self._activeSubdomains))
         logging.info(f"Subdomains can be found in {os.getcwd()}/{self._domain}.{os.getenv('file_extension')}")
 
-obj = SubDomainEnumerator("mvgrce.com")
+obj = SubDomainEnumerator(input("Domain (example.com): ")
 subdomains = obj.fetchSubDomains()
