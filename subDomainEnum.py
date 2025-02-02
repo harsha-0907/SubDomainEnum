@@ -198,5 +198,5 @@ class SubDomainEnumerator():
             file.write("\n".join(_subdomain for _subdomain in self._activeSubdomains))
         logging.info(f"Subdomains can be found in {os.getcwd()}/{self._domain}.{os.getenv('file_extension')}")
 
-obj = SubDomainEnumerator(input("Domain (example.com): ")
+obj = SubDomainEnumerator(input("Domain (example.com): "))
 subdomains = obj.fetchSubDomains()
