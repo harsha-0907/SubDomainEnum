@@ -18,6 +18,14 @@ class GoogleQuery:
         self.headers = {"User-Agent": self.user_agent, "Connection": "keep-alive"}
         self.params = {"key":self.api_key, "cx": self.cx}
         self._domain = domain
+        self.canProceed = False  # To indicate if the search engine is ready to query
+        self.isWorking()    # Check if the Google Search Engine is initalized 
+    
+    def isWorking(self):
+        _resp = self.queryGoogle(self._domain)
+        if _resp:
+            # Recieved an empty dictionary
+            self.canProceed = True      
 
     def queryGoogle(self, query):
         try:
@@ -28,16 +36,18 @@ class GoogleQuery:
                 params=self.params, allow_redirects=True, timeout=3)
             time.sleep(1)
             resp = _resp.json()
-            if _resp.status_code == 400:
+            if _resp.status_code >= 400:
                 # logging.error(f"""Error occured while searching for subdomains: {' '.join(error['reason'] for error in resp["error"]["errors"])}""")
-                logging.critical("API Token(s) is invalid")
+                if self.canProceed:
+                    logging.critical("API Token(s) is invalid")
                 return dict()
             else:
                 logging.info("Data Obtained")
                 return resp
                 
         except Exception as _e:
-            logging.critical(f"Error in GoogleQuery - {_e}")
+            if self.canProceed:
+                logging.critical(f"Error in GoogleQuery - {_e}")
             return dict()
 
     def searchHandler(self, exceptions: List = []):
@@ -65,7 +75,8 @@ class GoogleQuery:
 
     def fetchSubDomains(self):
         subdomains = []; _newSubdomains = []
-        if self._domain:
+        if self._domain and self.canProceed:
+            logging.info("Fetching Sub-Domains from Google-Search Engine")
             while True:
                 searchAgain=False
                 _newSubdomains = self.parseGoogleResult(self.searchHandler(subdomains))
@@ -77,6 +88,8 @@ class GoogleQuery:
                 if not searchAgain:
                     # If we don't have anymore new subdomains -> break
                     break
+        else:
+            logging.warning(f" Unable to perform Google Querying.. Please check the credentials in the .env file")
         return subdomains
 
 class Crtsh:
@@ -89,17 +102,24 @@ class Crtsh:
         # Max 3 retries allowed
         try:
             self._params = {"q": self._domain}
-            _resp = requests.get(self._baseUrl, headers=self._headers, params=self._params, allow_redirects=True)
+            _resp = requests.get(self._baseUrl, headers=self._headers, params=self._params, allow_redirects=True, timeout=12)
             if _resp.status_code >= 400:
                 if retries < 3:
                     retries += 1
+                    print("Retrying")
                     return self.getRawDomainData(retires)
                 else:
                     return None
             else:
+                print("Fetched Raw Data")
                 return _resp.text
         
+        except requests.Timeout as _rte:
+            logging.error("Unable to Connect to crt.sh, server not responding")
+            return None
+
         except Exception as e:
+            print("Raised Error: ", e)
             # Return None to indicate empty data from the website
             return None
 
@@ -126,8 +146,9 @@ class Crtsh:
             return list(_subdomains)
 
     def fetchSubDomains(self):
+        print("Fetching Subdomains from crt.sh...")
         if self._domain:
-            logging.info("Obtaining Assets from crt.sh")
+            print("Obtaining Assets from crt.sh")
             raw_html = self.getRawDomainData()
             if raw_html:
                 # Parse the document & obtain the urls
@@ -141,8 +162,9 @@ class SubDomainEnumerator():
         self.crtsh = Crtsh(self._domain)
 
     def fetchSubDomains(self):
-        _subdomains_crtsh = self.crtsh.fetchSubDomains()
         _subdomains_google_query = self.googleSearchEngine.fetchSubDomains()
+        _subdomains_crtsh = self.crtsh.fetchSubDomains()
+        print("Sub-Domain Enum Complete...")
         if _subdomains_google_query:
             _subdomains_google_query = [__subdomain + '.' + self._domain for __subdomain in _subdomains_google_query]
         
@@ -151,10 +173,15 @@ class SubDomainEnumerator():
             if __subdomain not in self._subdomains:
                 self._subdomains.append(__subdomain)
         
-        print(f"Scanning the urls for active response - {len(self._subdomains)}")
-        self.filterActiveDomains()
-        self.saveData()
+        self._activeSubdomains = []
+        if len(self._subdomains) > 0:
+            print(f"Scanning the urls for active response - {len(self._subdomains)}")
+            self.filterActiveDomains()
+            self.saveData()
+        else:
+            print("No Urls present to Filter")
         return self._activeSubdomains
+    
     def filterActiveDomains(self):
         # Here we will filter the domains to see if the domain is active or not
         # We will return raw subdomains in case domains use any  technique to block the scans from occuring
@@ -164,8 +191,9 @@ class SubDomainEnumerator():
             _subdomain = self.isActive(_subdomain)
             if _subdomain:
                 self._activeSubdomains.append(_subdomain)
-        pass
+        
         return self._activeSubdomains
+    
     def isActive(self, _subdomain):
         # Check if the subdomain is active
         try:
@@ -176,23 +204,28 @@ class SubDomainEnumerator():
                 # Any error code means that the server is present but may or maynot accept the request
                 print(f"Active ({resp.status_code})")
                 return "https://"+_subdomain
+
             else:
                 resp = requests.get(url=f"http://{_subdomain}", headers={"User-Agent": os.getenv("user_agent")}, timeout=3)
                 if resp is not None:
                     # The insecure version (http) is Active
                     print(f"Active ({resp.status_code})")
                     return "http://"+_subdomain
+
                 else:
                     # The subdomain is in-active
                     print(f"In-Active ({resp})")
                     return None
+
         except socket.gaierror as _e:
             # Error while resolving domains name or host name
             print("In-Active (Connection Timeout)")
             return None
+
         except Exception as _e:
             print(f"In-Active ({_e})")
             return None
+
     def saveData(self):
         with open(f"{self._domain}.txt", 'w') as file:
             file.write("\n".join(_subdomain for _subdomain in self._activeSubdomains))
